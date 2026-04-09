@@ -12,147 +12,94 @@ interface TermLine {
   text: string;
 }
 
-const COMMANDS: Record<string, (args: string[]) => string[]> = {
+const COMMANDS: Record<string, (args: string[], currentTime: Date, sessionStart: number) => string[]> = {
   help: () => [
     "Available commands:",
-    "  help          — Show this help",
-    "  status        — System status",
-    "  scan [target] — Simulate network scan",
-    "  ping [host]   — Simulate ping",
-    "  whoami        — Current user info",
-    "  clear         — Clear terminal",
-    "  date          — Current date/time",
-    "  uptime        — System uptime",
-    "  neofetch      — System info",
-    "  matrix        — Enter the matrix",
-    "  hack [target] — Simulate hack sequence",
-    "  nmap [target] — Port scan simulation",
-    "  ls            — List directory",
-    "  cat [file]    — Read file contents",
+    "  help    — Show commands",
+    "  date    — Current date/time",
+    "  time    — Precise time with timezone",
+    "  uptime  — Session duration",
+    "  cal     — Calendar",
+    "  neofetch— System info",
+    "  clear   — Clear terminal",
   ],
-  status: () => [
-    "╔══════════════════════════════════╗",
-    "║     NOVA SYSTEM STATUS           ║",
-    "╠══════════════════════════════════╣",
-    "║ CPU:      ████████░░  82%        ║",
-    "║ Memory:   ██████░░░░  64%        ║",
-    "║ GPU:      █████████░  94%        ║",
-    "║ Network:  ████████░░  ACTIVE     ║",
-    "║ AI Core:  ██████████  ONLINE     ║",
-    "║ Security: ██████████  LOCKED     ║",
-    "╚══════════════════════════════════╝",
+  
+  date: (_, currentTime) => [
+    "╔════════════════════════════════════╗",
+    "║         CURRENT DATE/TIME            ║",
+    "╠════════════════════════════════════╣",
+    `║ ${currentTime.toString().padEnd(34)} ║`,
+    "╚════════════════════════════════════╝",
   ],
-  scan: (args) => {
-    const target = args[0] || "local network";
-    return [
-      `Initiating scan on ${target}...`,
-      "Scanning ports: 22, 80, 443, 3000, 5432, 8080...",
-      `[+] ${target}:22   — SSH (OpenSSH 9.2)`,
-      `[+] ${target}:80   — HTTP (nginx/1.24)`,
-      `[+] ${target}:443  — HTTPS (TLS 1.3)`,
-      `[+] ${target}:5432 — PostgreSQL`,
-      `Scan complete. 4 services detected.`,
-    ];
-  },
-  ping: (args) => {
-    const host = args[0] || "nova.ai";
-    return [
-      `PING ${host} (142.250.80.14):`,
-      `64 bytes: icmp_seq=1 ttl=117 time=${(Math.random() * 20 + 5).toFixed(1)}ms`,
-      `64 bytes: icmp_seq=2 ttl=117 time=${(Math.random() * 20 + 5).toFixed(1)}ms`,
-      `64 bytes: icmp_seq=3 ttl=117 time=${(Math.random() * 20 + 5).toFixed(1)}ms`,
-      `--- ${host} ping statistics ---`,
-      `3 packets transmitted, 3 received, 0% packet loss`,
-    ];
-  },
-  whoami: () => ["nova-operator@NOVA-AI [ADMIN]", "Clearance: OMEGA", "Session: active since boot"],
-  date: () => [new Date().toString()],
-  uptime: () => [`System uptime: ${Math.floor(Math.random() * 200 + 50)} days, ${Math.floor(Math.random() * 24)}:${Math.floor(Math.random() * 60).toString().padStart(2, "0")}`],
-  neofetch: () => [
-    "        ▄▄▄▄▄▄▄▄▄         nova-operator@nova-ai",
-    "      ▄█████████████▄      ──────────────────────",
-    "    ▄███████████████████▄   OS: NOVA AI v1.0",
-    "   ████████████████████████  Kernel: quantum-7.2.1",
-    "  █████████████████████████  CPU: Neural Engine x16",
-    "  █████████████████████████  GPU: RTX NOVA 9000",
-    "   ████████████████████████  RAM: 256GB Quantum",
-    "    ▀███████████████████▀   Shell: nova-sh",
-    "      ▀█████████████▀      AI Core: ACTIVE",
-    "        ▀▀▀▀▀▀▀▀▀         Uptime: ETERNAL",
+  
+  time: (_, currentTime) => [
+    `Local Time: ${currentTime.toLocaleTimeString()}`,
+    `Timezone: ${Intl.DateTimeFormat().resolvedOptions().timeZone}`,
+    `UTC: ${currentTime.toUTCString()}`,
+    `Timestamp: ${Math.floor(currentTime.getTime() / 1000)}`,
   ],
-  matrix: () => [
-    "Wake up, Neo...",
-    "The Matrix has you...",
-    "Follow the white rabbit.",
-    "Knock, knock, Neo.",
-    "",
-    "01001110 01001111 01010110 01000001",
-    "SYSTEM BREACH DETECTED — just kidding. 😏",
+  
+  uptime: (_, currentTime, sessionStart) => {
+    const uptime = Date.now() - sessionStart;
+    const hours = Math.floor(uptime / (1000 * 60 * 60));
+    const minutes = Math.floor((uptime % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((uptime % (1000 * 60)) / 1000);
+    return [`Session Uptime: ${hours}h ${minutes}m ${seconds}s`];
+  },
+  
+  cal: (_, currentTime) => {
+    const year = currentTime.getFullYear();
+    const month = currentTime.getMonth();
+    const monthName = currentTime.toLocaleString("default", { month: "long" });
+    const firstDay = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const today = currentTime.getDate();
+    
+    let lines = [`   ${monthName} ${year}   `, "Su Mo Tu We Th Fr Sa"];
+    let line = "   ".repeat(firstDay);
+    
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dayStr = day === today ? `[${day.toString().padStart(2)}]` : day.toString().padStart(2, " ");
+      if ((firstDay + day - 1) % 7 === 6) {
+        line += " " + dayStr;
+        lines.push(line);
+        line = "";
+      } else {
+        line += " " + dayStr;
+      }
+    }
+    if (line.trim()) lines.push(line);
+    return lines;
+  },
+  
+  neofetch: (_, currentTime) => [
+    `        ▄▄▄▄▄▄▄▄▄         nova@nova-ai`,
+    `      ▄█████████████▄      ───────────────`,
+    `    ▄███████████████████▄   OS: NOVA AI v2.0`,
+    `   ████████████████████████  Date: ${currentTime.toLocaleDateString()}`,
+    `  █████████████████████████  Time: ${currentTime.toLocaleTimeString()}`,
+    `  █████████████████████████  Kernel: real-time`,
+    `   ████████████████████████  Shell: nova-sh`,
+    `    ▀███████████████████▀   ${currentTime.getFullYear()} Build`,
+    `      ▀█████████████▀`,
+    `        ▀▀▀▀▀▀▀▀▀`,
   ],
-  hack: (args) => {
-    const target = args[0] || "mainframe";
-    return [
-      `[*] Targeting ${target}...`,
-      "[*] Bypassing firewall... ████████████ OK",
-      "[*] Injecting payload... ████████████ OK",
-      "[*] Escalating privileges... ████████████ OK",
-      "[*] Extracting data... ████████████ OK",
-      `[+] Access granted to ${target}`,
-      "[!] Just a simulation. No actual hacking occurred. 🛡️",
-    ];
-  },
-  nmap: (args) => {
-    const target = args[0] || "192.168.1.0/24";
-    return [
-      `Starting Nmap 7.94 scan on ${target}`,
-      "Scanning 256 hosts...",
-      "",
-      "PORT     STATE  SERVICE        VERSION",
-      "22/tcp   open   ssh            OpenSSH 9.2",
-      "80/tcp   open   http           nginx 1.24",
-      "443/tcp  open   https          TLS 1.3",
-      "3306/tcp closed mysql",
-      "5432/tcp open   postgresql     16.1",
-      "8080/tcp open   http-proxy     envoy",
-      "27017/tcp closed mongodb",
-      "",
-      `Nmap done: 256 IPs scanned, 3 hosts up`,
-    ];
-  },
-  ls: () => [
-    "drwxr-xr-x  nova  nova  4096  /nova/core/",
-    "drwxr-xr-x  nova  nova  4096  /nova/models/",
-    "drwxr-xr-x  nova  nova  4096  /nova/data/",
-    "-rw-r--r--  nova  nova  2048  /nova/config.yaml",
-    "-rw-------  nova  nova   512  /nova/.secrets",
-    "-rwxr-xr-x  nova  nova  8192  /nova/nova-engine",
-  ],
-  cat: (args) => {
-    const file = args[0] || "config.yaml";
-    if (file.includes("secret")) return ["[ACCESS DENIED] Clearance required: OMEGA+"];
-    return [
-      `# ${file}`,
-      "ai_engine:",
-      "  model: nova-quantum-v1",
-      "  temperature: 0.7",
-      "  max_tokens: 8192",
-      "  stream: true",
-      "security:",
-      "  level: maximum",
-      "  encryption: AES-256-GCM",
-    ];
-  },
+  
+  clear: () => [],
+  
+  default: (args) => [`Command not found: ${args[0]}. Type 'help' for commands.`],
 };
 
 const TerminalPanel = ({ isOpen, onClose }: TerminalPanelProps) => {
   const [lines, setLines] = useState<TermLine[]>([
-    { type: "system", text: "NOVA Terminal v1.0 — Type 'help' for commands" },
-    { type: "system", text: "Connected to NOVA AI Core" },
+    { type: "system", text: `NOVA Terminal — ${new Date().toLocaleDateString()}` },
+    { type: "system", text: "Type 'help' for commands. Real-time active." },
     { type: "system", text: "" },
   ]);
   const [input, setInput] = useState("");
   const [history, setHistory] = useState<string[]>([]);
   const [histIdx, setHistIdx] = useState(-1);
+  const [sessionStart] = useState(Date.now());
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -168,7 +115,8 @@ const TerminalPanel = ({ isOpen, onClose }: TerminalPanelProps) => {
     const parts = cmd.trim().split(/\s+/);
     const command = parts[0]?.toLowerCase();
     const args = parts.slice(1);
-
+    const now = new Date();
+    
     const newLines: TermLine[] = [{ type: "input", text: `nova@ai:~$ ${cmd}` }];
 
     if (!command) {
@@ -177,17 +125,13 @@ const TerminalPanel = ({ isOpen, onClose }: TerminalPanelProps) => {
     }
 
     if (command === "clear") {
-      setLines([{ type: "system", text: "Terminal cleared." }]);
+      setLines([{ type: "system", text: `Cleared at ${now.toLocaleTimeString()}` }]);
       return;
     }
 
-    const handler = COMMANDS[command];
-    if (handler) {
-      const output = handler(args);
-      newLines.push(...output.map((text) => ({ type: "output" as const, text })));
-    } else {
-      newLines.push({ type: "error", text: `Command not found: ${command}. Type 'help' for available commands.` });
-    }
+    const handler = COMMANDS[command] || COMMANDS.default;
+    const output = handler(args, now, sessionStart);
+    newLines.push(...output.map((text) => ({ type: "output" as const, text })));
 
     setLines((p) => [...p, ...newLines]);
     setHistory((p) => [cmd, ...p]);
@@ -227,12 +171,13 @@ const TerminalPanel = ({ isOpen, onClose }: TerminalPanelProps) => {
       exit={{ opacity: 0, y: 20, height: 0 }}
       className="border-t border-primary/30 flex flex-col bg-background/95 backdrop-blur-xl"
     >
-      {/* Terminal header */}
       <div className="flex items-center justify-between px-4 py-1.5 border-b border-border bg-muted/30">
         <div className="flex items-center gap-2">
           <TermIcon className="w-3.5 h-3.5 text-primary" />
           <span className="text-[11px] font-mono text-primary/80">NOVA Terminal</span>
-          <span className="text-[9px] font-mono text-muted-foreground">v1.0</span>
+          <span className="text-[9px] font-mono text-muted-foreground">
+            {new Date().toLocaleTimeString()}
+          </span>
         </div>
         <div className="flex items-center gap-1">
           <button onClick={onClose} className="p-1 rounded hover:bg-muted/50 text-muted-foreground hover:text-foreground">
@@ -244,7 +189,6 @@ const TerminalPanel = ({ isOpen, onClose }: TerminalPanelProps) => {
         </div>
       </div>
 
-      {/* Terminal body */}
       <div
         ref={scrollRef}
         className="flex-1 overflow-y-auto p-3 font-mono text-xs leading-5 cursor-text"
