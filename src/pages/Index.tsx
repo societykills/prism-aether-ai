@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Terminal, MessageSquare, ChevronDown, Upload, FileText, X } from "lucide-react";
+import { Terminal, MessageSquare, ChevronDown, Upload, FileText, X, Trash2 } from "lucide-react";
 import NovaOrb from "@/components/nova/NovaOrb";
 import ParticleField from "@/components/nova/ParticleField";
 import ModeSelector, { AssistantMode } from "@/components/nova/ModeSelector";
@@ -9,6 +9,7 @@ import ToolsPanel from "@/components/nova/ToolsPanel";
 import ActivityLog, { LogEntry } from "@/components/nova/ActivityLog";
 import StatusBar from "@/components/nova/StatusBar";
 import TerminalPanel from "@/components/nova/TerminalPanel";
+import CustomInstructionsPanel from "@/components/nova/CustomInstructionsPanel";
 import { toast } from "sonner";
 
 interface DroppedFile {
@@ -180,8 +181,9 @@ const Index = () => {
             <span className="text-[9px] font-mono text-muted-foreground bg-muted/20 px-1.5 py-0.5 rounded">v2.0</span>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
           <ModeSelector activeMode={mode} onModeChange={handleModeChange} />
+          <CustomInstructionsPanel />
           <motion.button
             onClick={() => setTerminalOpen(!terminalOpen)}
             className={`p-2 rounded-lg transition-all ${
