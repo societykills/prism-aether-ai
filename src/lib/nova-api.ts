@@ -6,12 +6,14 @@ type Msg = { role: "user" | "assistant"; content: string };
 export async function streamChat({
   messages,
   mode,
+  customInstructions,
   onDelta,
   onDone,
   onError,
 }: {
   messages: Msg[];
   mode: string;
+  customInstructions?: string;
   onDelta: (text: string) => void;
   onDone: () => void;
   onError: (err: string) => void;
@@ -22,7 +24,7 @@ export async function streamChat({
       "Content-Type": "application/json",
       Authorization: `Bearer ${SUPABASE_KEY}`,
     },
-    body: JSON.stringify({ messages, mode }),
+    body: JSON.stringify({ messages, mode, customInstructions }),
   });
 
   if (!resp.ok) {

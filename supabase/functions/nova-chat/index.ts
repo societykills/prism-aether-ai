@@ -17,11 +17,16 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { messages, mode } = await req.json();
+    const { messages, mode, customInstructions } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
-    const systemPrompt = modeSystemPrompts[mode] || modeSystemPrompts.general;
+    let systemPrompt = modeSystemPrompts[mode] || modeSystemPrompts.general;
+
+    // Append user's custom instructions if provided
+    if (customInstructions && typeof customInstructions === "string" && customInstructions.trim()) {
+      systemPrompt += `\n\nAdditional user instructions (always follow these):\n${customInstructions.trim().slice(0, 2000)}`;
+    }
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
