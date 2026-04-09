@@ -356,3 +356,4 @@ const ChatPanel = ({ mode, onProcessingChange, onSpeakingChange, onLog }: ChatPa
 
 export default ChatPanel;
 
+
