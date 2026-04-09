@@ -7,6 +7,9 @@ import type { AssistantMode } from "./ModeSelector";
 import { streamChat, streamSearch } from "@/lib/nova-api";
 import { useSpeechRecognition, speak, stopSpeaking } from "@/hooks/use-speech";
 import { toast } from "sonner";
+import { getCustomInstructions } from "./CustomInstructionsPanel";
+
+const MESSAGES_KEY = "nova-chat-messages";
 
 interface ChatPanelProps {
   mode: AssistantMode;
@@ -24,7 +27,16 @@ const modeGreetings: Record<AssistantMode, string> = {
 };
 
 const ChatPanel = ({ mode, onProcessingChange, onSpeakingChange, onLog }: ChatPanelProps) => {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<Message[]>(() => {
+    try {
+      const saved = localStorage.getItem(MESSAGES_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return parsed.map((m: any) => ({ ...m, timestamp: new Date(m.timestamp) }));
+      }
+    } catch {}
+    return [];
+  });
   const [input, setInput] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSearchMode, setIsSearchMode] = useState(false);
@@ -35,6 +47,13 @@ const ChatPanel = ({ mode, onProcessingChange, onSpeakingChange, onLog }: ChatPa
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+  }, [messages]);
+
+  // Persist messages to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem(MESSAGES_KEY, JSON.stringify(messages.slice(-100)));
+    } catch {}
   }, [messages]);
 
   useEffect(() => {
@@ -101,7 +120,8 @@ const ChatPanel = ({ mode, onProcessingChange, onSpeakingChange, onLog }: ChatPa
       await streamSearch({ query: userText.trim(), onDelta: upsert, onDone, onError });
     } else {
       const apiMsgs = [...messages, userMsg].map((m) => ({ role: m.role, content: m.content }));
-      await streamChat({ messages: apiMsgs, mode, onDelta: upsert, onDone, onError });
+      const customInstructions = getCustomInstructions();
+      await streamChat({ messages: apiMsgs, mode, customInstructions, onDelta: upsert, onDone, onError });
     }
   }, [isProcessing, messages, mode, isSearchMode, voiceEnabled, onLog]);
 
