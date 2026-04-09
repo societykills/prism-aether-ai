@@ -1,11 +1,11 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Send, Mic, MicOff, Search, Volume2, VolumeX } from "lucide-react";
+import { Send, Mic, MicOff, Search, Volume2, VolumeX, Radio } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import ChatMessage, { Message } from "./ChatMessage";
 import WaveformVisualizer from "./WaveformVisualizer";
 import type { AssistantMode } from "./ModeSelector";
 import { streamChat, streamSearch } from "@/lib/nova-api";
-import { useSpeechRecognition, speak, stopSpeaking } from "@/hooks/use-speech";
+import { useSpeechRecognition, useWakeWord, useActiveListening, speak, stopSpeaking } from "@/hooks/use-speech";
 import { toast } from "sonner";
 import { getCustomInstructions } from "./CustomInstructionsPanel";
 
@@ -19,11 +19,11 @@ interface ChatPanelProps {
 }
 
 const modeGreetings: Record<AssistantMode, string> = {
-  general: "I'm NOVA. How can I assist you today?",
-  business: "Business systems online. Ready for your directive.",
-  developer: "Developer mode active. What shall we build?",
-  trading: "Markets loaded. What's your play?",
-  creative: "Creative engine initialized. Let's make something extraordinary.",
+  general: "I'm NOVA. Say \"Hey NOVA\" or type to begin.",
+  business: "Business systems online. Say \"Hey NOVA\" to begin.",
+  developer: "Developer mode active. Say \"Hey NOVA\" to begin.",
+  trading: "Markets loaded. Say \"Hey NOVA\" to begin.",
+  creative: "Creative engine initialized. Say \"Hey NOVA\" to begin.",
 };
 
 const ChatPanel = ({ mode, onProcessingChange, onSpeakingChange, onLog }: ChatPanelProps) => {
@@ -40,36 +40,20 @@ const ChatPanel = ({ mode, onProcessingChange, onSpeakingChange, onLog }: ChatPa
   const [input, setInput] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSearchMode, setIsSearchMode] = useState(false);
-  const [voiceEnabled, setVoiceEnabled] = useState(false);
+  const [voiceEnabled, setVoiceEnabled] = useState(true); // Default ON for conversational feel
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [handsFree, setHandsFree] = useState(false);
+  const [wakeDetected, setWakeDetected] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const messagesRef = useRef(messages);
   const { isListening, transcript, startListening, stopListening } = useSpeechRecognition();
+  const { isActive: isActiveListening, activeTranscript, listen: activeListen } = useActiveListening();
 
-  useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages]);
+  // Keep messagesRef in sync
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
 
-  // Persist messages to localStorage
-  useEffect(() => {
-    try {
-      localStorage.setItem(MESSAGES_KEY, JSON.stringify(messages.slice(-100)));
-    } catch {}
-  }, [messages]);
-
-  useEffect(() => {
-    onProcessingChange?.(isProcessing);
-  }, [isProcessing, onProcessingChange]);
-
-  useEffect(() => {
-    onSpeakingChange?.(isSpeaking);
-  }, [isSpeaking, onSpeakingChange]);
-
-  // Update input with transcript as user speaks
-  useEffect(() => {
-    if (transcript) setInput(transcript);
-  }, [transcript]);
-
-  const handleStream = useCallback(async (userText: string) => {
+  // Stable handleStream that reads from ref
+  const handleStream = useCallback(async (userText: string, fromVoice = false) => {
     if (!userText.trim() || isProcessing) return;
 
     const userMsg: Message = {
@@ -98,14 +82,17 @@ const ChatPanel = ({ mode, onProcessingChange, onSpeakingChange, onLog }: ChatPa
       });
     };
 
+    const shouldSpeak = voiceEnabled || fromVoice;
+
     const onDone = () => {
       setIsProcessing(false);
       onLog?.("chat", `NOVA responded (${assistantSoFar.length} chars)`);
-      if (voiceEnabled && assistantSoFar) {
-        // Speak only first ~300 chars for voice
-        const speakText = assistantSoFar.replace(/[#*`_\[\]]/g, "").slice(0, 300);
+      if (shouldSpeak && assistantSoFar) {
+        const speakText = assistantSoFar.replace(/[#*`_\[\]]/g, "").slice(0, 500);
         setIsSpeaking(true);
-        speak(speakText, () => setIsSpeaking(false));
+        speak(speakText, () => {
+          setIsSpeaking(false);
+        });
       }
     };
 
@@ -119,11 +106,57 @@ const ChatPanel = ({ mode, onProcessingChange, onSpeakingChange, onLog }: ChatPa
       onLog?.("tool", `Searching: ${userText.trim().slice(0, 40)}`);
       await streamSearch({ query: userText.trim(), onDelta: upsert, onDone, onError });
     } else {
-      const apiMsgs = [...messages, userMsg].map((m) => ({ role: m.role, content: m.content }));
+      const currentMsgs = messagesRef.current;
+      const apiMsgs = [...currentMsgs, userMsg].map((m) => ({ role: m.role, content: m.content }));
       const customInstructions = getCustomInstructions();
       await streamChat({ messages: apiMsgs, mode, customInstructions, onDelta: upsert, onDone, onError });
     }
-  }, [isProcessing, messages, mode, isSearchMode, voiceEnabled, onLog]);
+  }, [isProcessing, mode, isSearchMode, voiceEnabled, onLog]);
+
+  // Wake word handler
+  const handleWake = useCallback((followUp: string) => {
+    setWakeDetected(true);
+    onLog?.("system", "Wake word detected: Hey NOVA");
+    toast.success("Hey NOVA!", { description: "I'm listening...", duration: 2000 });
+    
+    // Play a subtle activation sound via TTS
+    if (followUp.trim()) {
+      // User already said something after "Hey NOVA"
+      setTimeout(() => {
+        setWakeDetected(false);
+        handleStream(followUp, true);
+      }, 300);
+    } else {
+      // Wait for user to say their command
+      setTimeout(() => {
+        activeListen((text) => {
+          setWakeDetected(false);
+          handleStream(text, true);
+        });
+      }, 200);
+    }
+  }, [handleStream, activeListen, onLog]);
+
+  // Wake word listener — paused while processing or speaking
+  const { isPassiveListening } = useWakeWord(
+    handsFree,
+    handleWake,
+    isProcessing || isSpeaking || isActiveListening || isListening
+  );
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+  }, [messages]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(MESSAGES_KEY, JSON.stringify(messages.slice(-100)));
+    } catch {}
+  }, [messages]);
+
+  useEffect(() => { onProcessingChange?.(isProcessing); }, [isProcessing, onProcessingChange]);
+  useEffect(() => { onSpeakingChange?.(isSpeaking); }, [isSpeaking, onSpeakingChange]);
+  useEffect(() => { if (transcript) setInput(transcript); }, [transcript]);
 
   const handleSend = () => handleStream(input);
 
@@ -132,7 +165,7 @@ const ChatPanel = ({ mode, onProcessingChange, onSpeakingChange, onLog }: ChatPa
       stopListening();
     } else {
       startListening((finalText) => {
-        handleStream(finalText);
+        handleStream(finalText, true);
       });
     }
   };
@@ -145,8 +178,47 @@ const ChatPanel = ({ mode, onProcessingChange, onSpeakingChange, onLog }: ChatPa
     setVoiceEnabled(!voiceEnabled);
   };
 
+  const toggleHandsFree = () => {
+    const next = !handsFree;
+    setHandsFree(next);
+    if (next) {
+      setVoiceEnabled(true);
+      toast.success("Hands-free mode ON", { description: "Say \"Hey NOVA\" to talk anytime." });
+      onLog?.("system", "Hands-free voice mode activated");
+    } else {
+      toast.info("Hands-free mode OFF");
+      onLog?.("system", "Hands-free voice mode deactivated");
+    }
+  };
+
+  const isAnyListening = isListening || isActiveListening || wakeDetected;
+
   return (
     <div className="flex flex-col h-full">
+      {/* Hands-free status bar */}
+      <AnimatePresence>
+        {handsFree && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="px-4 pt-2"
+          >
+            <div className="flex items-center justify-center gap-2 py-1.5 px-3 rounded-lg glass text-[10px] font-mono">
+              <motion.div
+                className="w-2 h-2 rounded-full"
+                style={{ background: isPassiveListening ? "hsl(var(--primary))" : "hsl(var(--muted-foreground))" }}
+                animate={isPassiveListening ? { opacity: [0.4, 1, 0.4], scale: [0.8, 1.2, 0.8] } : {}}
+                transition={{ duration: 1.5, repeat: Infinity }}
+              />
+              <span className="text-primary/70">
+                {isProcessing ? "Processing..." : isSpeaking ? "Speaking..." : isActiveListening ? "Listening to you..." : wakeDetected ? "Wake detected..." : isPassiveListening ? "Listening for \"Hey NOVA\"..." : "Starting microphone..."}
+              </span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Messages area */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin">
         {messages.length === 0 && (
@@ -167,7 +239,7 @@ const ChatPanel = ({ mode, onProcessingChange, onSpeakingChange, onLog }: ChatPa
               <span className="font-display text-2xl text-primary glow-text">N</span>
             </motion.div>
             <p className="text-sm text-muted-foreground font-mono max-w-md">{modeGreetings[mode]}</p>
-            <div className="flex gap-2 mt-2">
+            <div className="flex flex-wrap justify-center gap-2 mt-2">
               {["What can you do?", "Help me code", "Search the web"].map((q) => (
                 <motion.button
                   key={q}
@@ -180,6 +252,19 @@ const ChatPanel = ({ mode, onProcessingChange, onSpeakingChange, onLog }: ChatPa
                 </motion.button>
               ))}
             </div>
+            {!handsFree && (
+              <motion.button
+                onClick={toggleHandsFree}
+                className="flex items-center gap-2 mt-3 text-xs px-4 py-2 rounded-full glass glow-border text-primary/60 hover:text-primary transition-colors"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.8 }}
+                whileHover={{ scale: 1.05 }}
+              >
+                <Radio className="w-3.5 h-3.5" />
+                Enable hands-free voice
+              </motion.button>
+            )}
           </motion.div>
         )}
         <AnimatePresence>
@@ -211,7 +296,7 @@ const ChatPanel = ({ mode, onProcessingChange, onSpeakingChange, onLog }: ChatPa
 
       {/* Waveform when listening */}
       <AnimatePresence>
-        {isListening && (
+        {isAnyListening && (
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
@@ -219,8 +304,13 @@ const ChatPanel = ({ mode, onProcessingChange, onSpeakingChange, onLog }: ChatPa
             className="px-4 py-2"
           >
             <div className="glass rounded-xl p-3 glow-border">
-              <p className="text-[10px] font-mono text-primary/70 mb-2 uppercase tracking-widest">● Listening...</p>
-              <WaveformVisualizer isActive={isListening} />
+              <p className="text-[10px] font-mono text-primary/70 mb-2 uppercase tracking-widest">
+                {wakeDetected ? "● NOVA activated — speak now..." : isActiveListening ? "● Listening to your command..." : "● Listening..."}
+              </p>
+              {(activeTranscript || transcript) && (
+                <p className="text-xs font-mono text-foreground/80 mb-2 italic">"{activeTranscript || transcript}"</p>
+              )}
+              <WaveformVisualizer isActive={isAnyListening} />
             </div>
           </motion.div>
         )}
@@ -229,7 +319,21 @@ const ChatPanel = ({ mode, onProcessingChange, onSpeakingChange, onLog }: ChatPa
       {/* Input area */}
       <div className="p-4 border-t border-border glass-strong">
         <div className="flex items-center gap-2">
-          {/* Voice input */}
+          {/* Hands-free toggle */}
+          <motion.button
+            onClick={toggleHandsFree}
+            className={`p-2.5 rounded-lg transition-all shrink-0 ${
+              handsFree
+                ? "bg-primary text-primary-foreground glow-box-strong"
+                : "glass text-muted-foreground hover:text-foreground"
+            }`}
+            whileTap={{ scale: 0.9 }}
+            title={handsFree ? "Disable hands-free" : "Enable hands-free (Hey NOVA)"}
+          >
+            <Radio className="w-4 h-4" />
+          </motion.button>
+
+          {/* Manual voice input */}
           <motion.button
             onClick={handleVoiceToggle}
             className={`p-2.5 rounded-lg transition-all shrink-0 ${
@@ -238,7 +342,7 @@ const ChatPanel = ({ mode, onProcessingChange, onSpeakingChange, onLog }: ChatPa
                 : "glass text-muted-foreground hover:text-foreground"
             }`}
             whileTap={{ scale: 0.9 }}
-            title={isListening ? "Stop listening" : "Start voice input"}
+            title={isListening ? "Stop listening" : "Push to talk"}
           >
             {isListening ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4" />}
           </motion.button>
@@ -263,7 +367,7 @@ const ChatPanel = ({ mode, onProcessingChange, onSpeakingChange, onLog }: ChatPa
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSend()}
-              placeholder={isSearchMode ? "Search the web..." : `Message NOVA [${mode.toUpperCase()}]...`}
+              placeholder={isSearchMode ? "Search the web..." : handsFree ? "Say \"Hey NOVA\" or type..." : `Message NOVA [${mode.toUpperCase()}]...`}
               className="w-full bg-muted/20 border border-border rounded-xl px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 font-mono pr-10"
             />
             {isSearchMode && (
