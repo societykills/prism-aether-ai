@@ -4,6 +4,7 @@ import "./index.css";
 
 createRoot(document.getElementById("root")!).render(<App />);
 # NOVA CORE INTEGRATION
+class NovaSystem:
     def __init__(self):
         self.version = "2.1.0"
         self.status = "Optimal"
