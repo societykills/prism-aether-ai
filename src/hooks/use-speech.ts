@@ -1,10 +1,5 @@
 import { useCallback, useRef, useState, useEffect } from "react";
 
-/**
- * Always-on speech recognition with "Hey NOVA" wake word detection.
- * After wake word is detected, captures the user's command and sends it.
- * After NOVA responds (and finishes speaking), automatically resumes listening.
- */
 export function useSpeechRecognition() {
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState("");
@@ -18,6 +13,9 @@ export function useSpeechRecognition() {
       return;
     }
 
+    // Stop any previous instance cleanly
+    try { recognitionRef.current?.stop(); } catch {}
+
     onResultRef.current = onResult;
 
     const recognition = new SpeechRecognition();
@@ -30,11 +28,8 @@ export function useSpeechRecognition() {
       let finalTranscript = "";
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const t = event.results[i][0].transcript;
-        if (event.results[i].isFinal) {
-          finalTranscript += t;
-        } else {
-          interimTranscript += t;
-        }
+        if (event.results[i].isFinal) finalTranscript += t;
+        else interimTranscript += t;
       }
       setTranscript(finalTranscript || interimTranscript);
       if (finalTranscript) {
@@ -53,7 +48,8 @@ export function useSpeechRecognition() {
   }, []);
 
   const stopListening = useCallback(() => {
-    recognitionRef.current?.stop();
+    try { recognitionRef.current?.stop(); } catch {}
+    recognitionRef.current = null;
     setIsListening(false);
   }, []);
 
@@ -61,9 +57,8 @@ export function useSpeechRecognition() {
 }
 
 /**
- * Always-on wake word listener.
- * Runs continuous speech recognition in the background, waiting for "hey nova".
- * When detected, calls onWake with any text that followed the wake phrase.
+ * Always-on wake word listener for "Hey NOVA".
+ * Uses a debounced restart to prevent rapid start/stop cycling.
  */
 export function useWakeWord(
   enabled: boolean,
@@ -75,18 +70,33 @@ export function useWakeWord(
   const enabledRef = useRef(enabled);
   const pausedRef = useRef(paused);
   const onWakeRef = useRef(onWake);
+  const restartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const intentionalStopRef = useRef(false);
 
   useEffect(() => { enabledRef.current = enabled; }, [enabled]);
   useEffect(() => { pausedRef.current = paused; }, [paused]);
   useEffect(() => { onWakeRef.current = onWake; }, [onWake]);
 
+  const stopPassive = useCallback(() => {
+    intentionalStopRef.current = true;
+    if (restartTimerRef.current) {
+      clearTimeout(restartTimerRef.current);
+      restartTimerRef.current = null;
+    }
+    try { recognitionRef.current?.stop(); } catch {}
+    recognitionRef.current = null;
+    setIsPassiveListening(false);
+  }, []);
+
   const startPassive = useCallback(() => {
-    if (!enabledRef.current) return;
+    if (!enabledRef.current || pausedRef.current) return;
+
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SR) return;
 
-    // Stop any existing instance
+    // Clean up existing
     try { recognitionRef.current?.stop(); } catch {}
+    intentionalStopRef.current = false;
 
     const recognition = new SR();
     recognition.continuous = true;
@@ -95,24 +105,22 @@ export function useWakeWord(
 
     recognition.onresult = (event: any) => {
       if (pausedRef.current) return;
-      
+
       for (let i = event.resultIndex; i < event.results.length; i++) {
         if (!event.results[i].isFinal) continue;
         const text = event.results[i][0].transcript.toLowerCase().trim();
-        
-        // Check for wake word variations
-        const wakePatterns = ["hey nova", "hey noba", "hey nofa", "a nova", "hey nover", "hey novo"];
+
+        const wakePatterns = ["hey nova", "hey noba", "hey nofa", "a nova", "hey nover", "hey novo", "hello nova"];
         const matchedPattern = wakePatterns.find(p => text.includes(p));
-        
+
         if (matchedPattern) {
-          // Extract the command after the wake word
           const idx = text.indexOf(matchedPattern);
           const followUp = text.slice(idx + matchedPattern.length).trim();
-          
-          // Stop passive listening while NOVA processes
+
+          intentionalStopRef.current = true;
           try { recognition.stop(); } catch {}
           setIsPassiveListening(false);
-          
+
           onWakeRef.current(followUp);
           return;
         }
@@ -120,18 +128,16 @@ export function useWakeWord(
     };
 
     recognition.onerror = (e: any) => {
-      // Restart on most errors (not "aborted" which is intentional)
-      if (e.error !== "aborted" && enabledRef.current) {
-        setTimeout(() => startPassive(), 1000);
-      }
       setIsPassiveListening(false);
+      if (e.error !== "aborted" && enabledRef.current && !intentionalStopRef.current) {
+        restartTimerRef.current = setTimeout(() => startPassive(), 1500);
+      }
     };
 
     recognition.onend = () => {
       setIsPassiveListening(false);
-      // Auto-restart if still enabled
-      if (enabledRef.current) {
-        setTimeout(() => startPassive(), 300);
+      if (enabledRef.current && !intentionalStopRef.current && !pausedRef.current) {
+        restartTimerRef.current = setTimeout(() => startPassive(), 500);
       }
     };
 
@@ -140,31 +146,28 @@ export function useWakeWord(
       recognition.start();
       setIsPassiveListening(true);
     } catch {
-      setTimeout(() => startPassive(), 1000);
+      restartTimerRef.current = setTimeout(() => startPassive(), 1500);
     }
-  }, []);
-
-  const stopPassive = useCallback(() => {
-    try { recognitionRef.current?.stop(); } catch {}
-    recognitionRef.current = null;
-    setIsPassiveListening(false);
   }, []);
 
   useEffect(() => {
     if (enabled && !paused) {
-      startPassive();
+      // Small delay to prevent rapid toggling
+      const timer = setTimeout(() => startPassive(), 200);
+      return () => {
+        clearTimeout(timer);
+        stopPassive();
+      };
     } else {
       stopPassive();
     }
-    return () => stopPassive();
   }, [enabled, paused, startPassive, stopPassive]);
 
   return { isPassiveListening, restartPassive: startPassive };
 }
 
 /**
- * Active listening mode — captures a single command then stops.
- * Used after wake word is detected to capture the full command.
+ * Active listening — captures a single command then stops.
  */
 export function useActiveListening() {
   const recognitionRef = useRef<any>(null);
@@ -174,6 +177,9 @@ export function useActiveListening() {
   const listen = useCallback((onComplete: (text: string) => void) => {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SR) return;
+
+    // Stop previous
+    try { recognitionRef.current?.stop(); } catch {}
 
     const recognition = new SR();
     recognition.continuous = false;
@@ -206,6 +212,7 @@ export function useActiveListening() {
 
   const cancel = useCallback(() => {
     try { recognitionRef.current?.stop(); } catch {}
+    recognitionRef.current = null;
     setIsActive(false);
   }, []);
 
@@ -221,7 +228,6 @@ export function speak(text: string, onEnd?: () => void) {
   utterance.pitch = 0.9;
   utterance.volume = 1;
 
-  // Try to pick a good voice
   const voices = window.speechSynthesis.getVoices();
   const preferred = voices.find(
     (v) => v.name.includes("Google") && v.lang.startsWith("en")

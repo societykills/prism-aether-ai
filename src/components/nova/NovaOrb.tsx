@@ -8,65 +8,6 @@ interface NovaOrbProps {
   size?: "sm" | "lg";
 }
 
-const MATRIX_CHARS = "アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン01";
-
-const MatrixRain = ({ active, count }: { active: boolean; count: number }) => {
-  return (
-    <div className="absolute inset-0 rounded-full overflow-hidden opacity-70">
-      {Array.from({ length: count }).map((_, i) => {
-        const delay = Math.random() * 2;
-        const duration = 1.2 + Math.random() * 2;
-        const left = (i / count) * 100;
-        const chars = Array.from({ length: 8 }, () =>
-          MATRIX_CHARS[Math.floor(Math.random() * MATRIX_CHARS.length)]
-        ).join("\n");
-        return (
-          <motion.div
-            key={i}
-            className="absolute font-mono leading-tight text-primary whitespace-pre"
-            style={{ left: `${left}%`, top: "-20%", fontSize: "7px", lineHeight: "9px" }}
-            animate={active ? {
-              y: ["0%", "140%"],
-              opacity: [0, 1, 1, 0],
-            } : { y: "0%", opacity: 0.15 }}
-            transition={{
-              duration,
-              delay,
-              repeat: Infinity,
-              ease: "linear",
-            }}
-          >
-            {chars}
-          </motion.div>
-        );
-      })}
-    </div>
-  );
-};
-
-const HexGrid = ({ size }: { size: number }) => {
-  const hexCount = 6;
-  return (
-    <div className="absolute inset-0 rounded-full overflow-hidden pointer-events-none">
-      {Array.from({ length: hexCount }).map((_, i) => {
-        const angle = (i / hexCount) * Math.PI * 2;
-        const r = size * 0.28;
-        const x = 50 + (Math.cos(angle) * r / size) * 100;
-        const y = 50 + (Math.sin(angle) * r / size) * 100;
-        return (
-          <motion.div
-            key={i}
-            className="absolute w-2 h-2 border border-primary/20 rotate-45"
-            style={{ left: `${x}%`, top: `${y}%`, transform: "translate(-50%,-50%) rotate(45deg)" }}
-            animate={{ opacity: [0.1, 0.4, 0.1], scale: [0.8, 1, 0.8] }}
-            transition={{ duration: 2, repeat: Infinity, delay: i * 0.3 }}
-          />
-        );
-      })}
-    </div>
-  );
-};
-
 const NovaOrb = ({ isProcessing, isSpeaking, onClick, size = "sm" }: NovaOrbProps) => {
   const [ripples, setRipples] = useState<number[]>([]);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -74,13 +15,13 @@ const NovaOrb = ({ isProcessing, isSpeaking, onClick, size = "sm" }: NovaOrbProp
   const isActive = isProcessing || isSpeaking;
 
   const isLarge = size === "lg";
-  const orbSize = isLarge ? 200 : 80;
-  const canvasSize = orbSize;
+  const orbSize = isLarge ? 180 : 44;
+  const canvasSize = orbSize * 2; // Higher resolution canvas
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d")!;
     if (!ctx) return;
 
     const w = canvas.width;
@@ -89,86 +30,101 @@ const NovaOrb = ({ isProcessing, isSpeaking, onClick, size = "sm" }: NovaOrbProp
 
     const draw = () => {
       ctx.clearRect(0, 0, w, h);
-
       const cx = w / 2;
       const cy = h / 2;
-      const baseR = Math.min(w, h) * 0.33;
-      const points = 80;
+      const baseR = Math.min(w, h) * 0.3;
 
-      // Outer waveform ring
-      ctx.strokeStyle = isSpeaking ? "hsl(190, 100%, 50%)" : isProcessing ? "hsl(260, 80%, 60%)" : "hsl(190, 100%, 50%)";
+      // Outer ambient glow
+      const grad = ctx.createRadialGradient(cx, cy, baseR * 0.5, cx, cy, baseR * 1.4);
+      grad.addColorStop(0, `hsla(190, 100%, 50%, ${isActive ? 0.08 : 0.03})`);
+      grad.addColorStop(0.5, `hsla(260, 80%, 60%, ${isActive ? 0.04 : 0.01})`);
+      grad.addColorStop(1, "transparent");
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, w, h);
+
+      // Ring 1 — primary waveform
+      const points = 120;
+      ctx.strokeStyle = isSpeaking ? "hsl(190, 100%, 55%)" : isProcessing ? "hsl(240, 80%, 65%)" : "hsl(190, 100%, 45%)";
       ctx.lineWidth = isLarge ? 2 : 1.5;
-      ctx.globalAlpha = isActive ? 0.8 : 0.25;
-
+      ctx.globalAlpha = isActive ? 0.9 : 0.3;
       ctx.beginPath();
       for (let i = 0; i <= points; i++) {
         const angle = (i / points) * Math.PI * 2;
         const amp = isSpeaking
-          ? 8 + Math.sin(t * 5 + i * 0.4) * 12 + Math.sin(t * 9 + i * 0.2) * 6
+          ? 6 + Math.sin(t * 6 + i * 0.5) * 10 + Math.sin(t * 11 + i * 0.3) * 5
           : isProcessing
-          ? 4 + Math.sin(t * 2.5 + i * 0.6) * 6
-          : 1.5 + Math.sin(t + i * 0.5) * 2;
+          ? 3 + Math.sin(t * 3 + i * 0.7) * 5
+          : 1 + Math.sin(t * 0.8 + i * 0.4) * 1.5;
         const r = baseR + amp;
         const x = cx + Math.cos(angle) * r;
         const y = cy + Math.sin(angle) * r;
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
       }
       ctx.closePath();
       ctx.stroke();
 
-      // Inner ring
-      ctx.globalAlpha = isActive ? 0.5 : 0.12;
+      // Ring 2 — inner pulse
+      ctx.globalAlpha = isActive ? 0.5 : 0.15;
       ctx.lineWidth = isLarge ? 1.5 : 1;
+      ctx.strokeStyle = "hsl(200, 90%, 50%)";
       ctx.beginPath();
       for (let i = 0; i <= points; i++) {
         const angle = (i / points) * Math.PI * 2;
         const amp = isSpeaking
-          ? 3 + Math.sin(t * 7 + i * 0.6) * 7
-          : 1 + Math.sin(t * 1.5 + i * 0.4) * 1.5;
-        const r = baseR * 0.6 + amp;
+          ? 2 + Math.sin(t * 8 + i * 0.7) * 6
+          : 0.5 + Math.sin(t * 1.2 + i * 0.5) * 1;
+        const r = baseR * 0.65 + amp;
         const x = cx + Math.cos(angle) * r;
         const y = cy + Math.sin(angle) * r;
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
       }
       ctx.closePath();
       ctx.stroke();
 
-      // Third ring for large orb
+      // Ring 3 — accent ring (large only)
       if (isLarge) {
-        ctx.globalAlpha = isActive ? 0.3 : 0.08;
+        ctx.globalAlpha = isActive ? 0.35 : 0.1;
         ctx.strokeStyle = "hsl(260, 80%, 60%)";
         ctx.lineWidth = 1;
         ctx.beginPath();
         for (let i = 0; i <= points; i++) {
           const angle = (i / points) * Math.PI * 2;
           const amp = isSpeaking
-            ? 2 + Math.sin(t * 3 + i * 0.9) * 5
-            : 0.5 + Math.sin(t * 0.8 + i * 0.3) * 1;
+            ? 1 + Math.sin(t * 4 + i * 1.1) * 4
+            : 0.3 + Math.sin(t * 0.6 + i * 0.3) * 0.8;
           const r = baseR * 0.85 + amp;
           const x = cx + Math.cos(angle) * r;
           const y = cy + Math.sin(angle) * r;
-          if (i === 0) ctx.moveTo(x, y);
-          else ctx.lineTo(x, y);
+          i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
         }
         ctx.closePath();
         ctx.stroke();
       }
 
-      t += 0.03;
+      // Core dot glow
+      ctx.globalAlpha = 1;
+      const coreGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, isLarge ? 12 : 6);
+      coreGrad.addColorStop(0, `hsla(190, 100%, 60%, ${isSpeaking ? 1 : isProcessing ? 0.8 : 0.5})`);
+      coreGrad.addColorStop(0.5, `hsla(190, 100%, 50%, ${isActive ? 0.4 : 0.15})`);
+      coreGrad.addColorStop(1, "transparent");
+      ctx.fillStyle = coreGrad;
+      ctx.beginPath();
+      ctx.arc(cx, cy, isLarge ? 12 : 6, 0, Math.PI * 2);
+      ctx.fill();
+
+      t += 0.025;
       animFrameRef.current = requestAnimationFrame(draw);
     };
 
     draw();
     return () => cancelAnimationFrame(animFrameRef.current);
-  }, [isProcessing, isSpeaking, isActive, isLarge]);
+  }, [isProcessing, isSpeaking, isActive, isLarge, canvasSize]);
 
   useEffect(() => {
     if (!isSpeaking) return;
     const interval = setInterval(() => {
-      setRipples((prev) => [...prev.slice(-4), Date.now()]);
-    }, 600);
+      setRipples((prev) => [...prev.slice(-3), Date.now()]);
+    }, 800);
     return () => clearInterval(interval);
   }, [isSpeaking]);
 
@@ -183,151 +139,119 @@ const NovaOrb = ({ isProcessing, isSpeaking, onClick, size = "sm" }: NovaOrbProp
         {ripples.map((id) => (
           <motion.div
             key={id}
-            className="absolute rounded-full border border-primary/30"
-            initial={{ scale: 1, opacity: 0.5 }}
-            animate={{ scale: 3, opacity: 0 }}
+            className="absolute rounded-full border border-primary/20"
+            initial={{ scale: 1, opacity: 0.4 }}
+            animate={{ scale: 2.5, opacity: 0 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 2, ease: "easeOut" }}
+            transition={{ duration: 1.8, ease: "easeOut" }}
             style={{ width: orbSize, height: orbSize, top: 0, left: 0 }}
           />
         ))}
       </AnimatePresence>
 
-      {/* Rotating outer ring (large only) */}
+      {/* Rotating ring — large only */}
       {isLarge && (
         <motion.div
-          className="absolute rounded-full border border-primary/10"
-          style={{ width: orbSize + 40, height: orbSize + 40, top: -20, left: -20 }}
+          className="absolute rounded-full border border-primary/8"
+          style={{ width: orbSize + 30, height: orbSize + 30, top: -15, left: -15 }}
           animate={{ rotate: 360 }}
-          transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+          transition={{ duration: 25, repeat: Infinity, ease: "linear" }}
         >
-          {[0, 90, 180, 270].map((deg) => (
+          {[0, 120, 240].map((deg) => (
             <motion.div
               key={deg}
-              className="absolute w-1.5 h-1.5 rounded-full bg-primary/40"
+              className="absolute w-1 h-1 rounded-full bg-primary/30"
               style={{
-                top: "50%",
-                left: "50%",
-                transform: `rotate(${deg}deg) translateX(${(orbSize + 40) / 2}px) translate(-50%, -50%)`,
+                top: "50%", left: "50%",
+                transform: `rotate(${deg}deg) translateX(${(orbSize + 30) / 2}px) translate(-50%, -50%)`,
               }}
-              animate={{ opacity: [0.2, 0.8, 0.2] }}
-              transition={{ duration: 2, repeat: Infinity, delay: deg / 360 }}
+              animate={{ opacity: [0.15, 0.6, 0.15] }}
+              transition={{ duration: 2.5, repeat: Infinity, delay: deg / 360 }}
             />
           ))}
         </motion.div>
       )}
 
-      {/* Outer pulsing glow */}
+      {/* Ambient glow */}
       <motion.div
         className="absolute rounded-full pointer-events-none"
         style={{
-          width: orbSize * 1.6,
-          height: orbSize * 1.6,
-          top: -(orbSize * 0.3),
-          left: -(orbSize * 0.3),
-          background: "radial-gradient(circle, hsl(190 100% 50% / 0.1), hsl(260 80% 60% / 0.05), transparent 70%)",
+          width: orbSize * 1.5,
+          height: orbSize * 1.5,
+          top: -(orbSize * 0.25),
+          left: -(orbSize * 0.25),
+          background: `radial-gradient(circle, hsl(190 100% 50% / ${isActive ? 0.12 : 0.05}), hsl(260 80% 60% / 0.03), transparent 70%)`,
         }}
         animate={isActive
-          ? { scale: [1, 1.2, 1], opacity: [0.5, 1, 0.5] }
-          : { scale: [1, 1.05, 1], opacity: [0.3, 0.4, 0.3] }
+          ? { scale: [1, 1.15, 1], opacity: [0.6, 1, 0.6] }
+          : { scale: [1, 1.03, 1], opacity: [0.3, 0.5, 0.3] }
         }
-        transition={{ duration: isActive ? 1.2 : 3, repeat: Infinity }}
+        transition={{ duration: isActive ? 1 : 4, repeat: Infinity }}
       />
 
-      {/* The orb */}
+      {/* The orb — cleaner gradient */}
       <motion.div
         className="relative rounded-full overflow-hidden"
         style={{
           width: orbSize,
           height: orbSize,
-          background: "radial-gradient(circle at 35% 30%, hsl(190 100% 35%), hsl(220 80% 10%), hsl(260 60% 6%))",
+          background: `radial-gradient(circle at 38% 32%, hsl(190 80% 30%), hsl(220 60% 8%), hsl(240 40% 4%))`,
           boxShadow: isActive
-            ? `0 0 ${orbSize / 2}px hsl(190 100% 50% / 0.35), 0 0 ${orbSize}px hsl(190 100% 50% / 0.12), inset 0 0 ${orbSize / 3}px hsl(190 100% 50% / 0.15)`
-            : `0 0 ${orbSize / 4}px hsl(190 100% 50% / 0.15), 0 0 ${orbSize / 2}px hsl(190 100% 50% / 0.04)`,
+            ? `0 0 ${orbSize * 0.4}px hsl(190 100% 50% / 0.3), 0 0 ${orbSize}px hsl(190 100% 50% / 0.08), inset 0 0 ${orbSize * 0.2}px hsl(190 100% 50% / 0.1)`
+            : `0 0 ${orbSize * 0.15}px hsl(190 100% 50% / 0.12), inset 0 1px 0 hsl(190 100% 60% / 0.08)`,
         }}
         animate={
           isProcessing
-            ? { rotate: 360, scale: [1, 1.03, 1] }
+            ? { rotate: 360, scale: [1, 1.02, 1] }
             : isSpeaking
-            ? { scale: [1, 1.05, 0.98, 1.03, 1] }
-            : { scale: [1, 1.015, 1] }
+            ? { scale: [1, 1.04, 0.98, 1.02, 1] }
+            : { scale: [1, 1.01, 1] }
         }
         transition={
           isProcessing
-            ? { rotate: { duration: 6, repeat: Infinity, ease: "linear" }, scale: { duration: 2, repeat: Infinity } }
+            ? { rotate: { duration: 8, repeat: Infinity, ease: "linear" }, scale: { duration: 2, repeat: Infinity } }
             : isSpeaking
-            ? { duration: 0.5, repeat: Infinity, ease: "easeInOut" }
-            : { duration: 4, repeat: Infinity }
+            ? { duration: 0.6, repeat: Infinity, ease: "easeInOut" }
+            : { duration: 5, repeat: Infinity }
         }
-        whileHover={{ scale: 1.08 }}
+        whileHover={{ scale: isLarge ? 1.05 : 1.08 }}
       >
-        {/* Matrix rain */}
-        <MatrixRain active={isActive} count={isLarge ? 40 : 24} />
-
-        {/* Hex grid overlay */}
-        {isLarge && <HexGrid size={orbSize} />}
-
-        {/* Waveform canvas */}
+        {/* High-res waveform canvas */}
         <canvas
           ref={canvasRef}
           width={canvasSize}
           height={canvasSize}
-          className="absolute inset-0 z-10"
+          className="absolute inset-0 w-full h-full z-10"
         />
 
-        {/* Core glow */}
-        <motion.div
-          className="absolute inset-0 rounded-full z-20 pointer-events-none"
+        {/* Glass highlight */}
+        <div
+          className="absolute inset-0 z-20 pointer-events-none rounded-full"
           style={{
-            background: "radial-gradient(circle, hsl(190 100% 50% / 0.12), transparent 55%)",
+            background: "linear-gradient(135deg, hsl(190 100% 80% / 0.06) 0%, transparent 50%)",
           }}
-          animate={isSpeaking
-            ? { opacity: [0.3, 0.8, 0.3] }
-            : { opacity: [0.1, 0.2, 0.1] }
-          }
-          transition={{ duration: 0.8, repeat: Infinity }}
         />
-
-        {/* Center eye */}
-        <div className="absolute inset-0 flex items-center justify-center z-30">
-          <motion.div
-            className="rounded-full bg-primary"
-            style={{
-              width: isLarge ? 14 : 12,
-              height: isLarge ? 14 : 12,
-              boxShadow: `0 0 ${isLarge ? 20 : 12}px hsl(190 100% 50% / 0.9), 0 0 ${isLarge ? 50 : 24}px hsl(190 100% 50% / 0.4)`,
-            }}
-            animate={
-              isProcessing
-                ? { opacity: [0.4, 1, 0.4], scale: [0.8, 1.3, 0.8] }
-                : isSpeaking
-                ? { opacity: [0.5, 1, 0.5], scale: [1, 1.5, 1] }
-                : { opacity: [0.5, 0.8, 0.5] }
-            }
-            transition={{ duration: isSpeaking ? 0.35 : 1.5, repeat: Infinity }}
-          />
-        </div>
       </motion.div>
 
       {/* Status label */}
-      <motion.p
-        className={`font-display text-primary/60 text-center tracking-[0.3em] uppercase ${isLarge ? "text-xs mt-4" : "text-[9px] mt-1.5"}`}
-        animate={{ opacity: [0.4, 0.9, 0.4] }}
-        transition={{ duration: 2, repeat: Infinity }}
-      >
-        {isProcessing ? "Thinking" : isSpeaking ? "Speaking" : "Online"}
-      </motion.p>
-
-      {/* NOVA label for large */}
       {isLarge && (
-        <motion.p
-          className="font-display text-2xl font-bold tracking-[0.4em] glow-text text-primary mt-2"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.5 }}
-        >
-          NOVA
-        </motion.p>
+        <>
+          <motion.p
+            className="font-display text-xl font-bold tracking-[0.4em] glow-text text-primary mt-3"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.4 }}
+          >
+            NOVA
+          </motion.p>
+          <motion.p
+            className="font-mono text-[10px] text-primary/40 tracking-widest uppercase mt-1"
+            animate={{ opacity: [0.3, 0.7, 0.3] }}
+            transition={{ duration: 3, repeat: Infinity }}
+          >
+            {isProcessing ? "Processing" : isSpeaking ? "Speaking" : "Online"}
+          </motion.p>
+        </>
       )}
     </button>
   );
