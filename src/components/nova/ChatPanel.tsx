@@ -107,22 +107,14 @@ const ChatPanel = ({ mode, onProcessingChange, onSpeakingChange, onLog }: ChatPa
 
   const handleStream = useCallback(async (userText: string, fromVoice = false) => {
     if (!userText.trim() || isProcessing) return;
-
-    // "Hello" trigger — context refresh
-    const trimmed = userText.trim();
-    if (/^hello\b/i.test(trimmed)) {
-      onLog?.("system", "Context refresh triggered via Hello");
-      toast.info("Context sync initiated", { description: "Refreshing project state..." });
-    }
-
     const userMsg: Message = {
-      id: crypto.randomUUID(), role: "user", content: trimmed,
-      timestamp: new Date(),
+      id: crypto.randomUUID(), role: "user", content: userText.trim(),
+      timestamp: new Date(), // REAL-TIME timestamp
     };
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
     setIsProcessing(true);
-    onLog?.("chat", `User: ${trimmed.slice(0, 40)}...`);
+    onLog?.("chat", `User: ${userText.trim().slice(0, 40)}...`);
 
     let assistantSoFar = "";
     const assistantId = crypto.randomUUID();
