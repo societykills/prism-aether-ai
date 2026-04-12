@@ -184,6 +184,11 @@ const ChatPanel = ({ mode, onProcessingChange, onSpeakingChange, onLog, onMessag
   useEffect(() => { onProcessingChange?.(isProcessing); }, [isProcessing, onProcessingChange]);
   useEffect(() => { onSpeakingChange?.(isSpeaking); }, [isSpeaking, onSpeakingChange]);
   useEffect(() => { if (transcript) setInput(transcript); }, [transcript]);
+  useEffect(() => {
+    if (!isProcessing && messages.length > 0) {
+      onMessagesUpdate?.(messages.map(m => ({ role: m.role, content: m.content })));
+    }
+  }, [isProcessing, messages, onMessagesUpdate]);
 
   const handleSend = () => handleStream(input);
   const handleVoiceToggle = () => {
