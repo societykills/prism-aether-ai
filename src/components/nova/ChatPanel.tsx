@@ -24,6 +24,7 @@ interface ChatPanelProps {
   onProcessingChange?: (processing: boolean) => void;
   onSpeakingChange?: (speaking: boolean) => void;
   onLog?: (type: "chat" | "tool" | "system", text: string) => void;
+  onMessagesUpdate?: (messages: { role: string; content: string }[]) => void;
 }
 
 const modeGreetings: Record<AssistantMode, string> = {
