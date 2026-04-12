@@ -24,6 +24,7 @@ interface ChatPanelProps {
   onProcessingChange?: (processing: boolean) => void;
   onSpeakingChange?: (speaking: boolean) => void;
   onLog?: (type: "chat" | "tool" | "system", text: string) => void;
+  onMessagesUpdate?: (messages: { role: string; content: string }[]) => void;
 }
 
 const modeGreetings: Record<AssistantMode, string> = {
@@ -34,7 +35,7 @@ const modeGreetings: Record<AssistantMode, string> = {
   creative: "Creative engine initialized. Say \"Hey NOVA\" to begin.",
 };
 
-const ChatPanel = ({ mode, onProcessingChange, onSpeakingChange, onLog }: ChatPanelProps) => {
+const ChatPanel = ({ mode, onProcessingChange, onSpeakingChange, onLog, onMessagesUpdate }: ChatPanelProps) => {
   const [messages, setMessages] = useState<Message[]>(() => {
     try {
       const saved = localStorage.getItem(MESSAGES_KEY);
@@ -183,6 +184,11 @@ const ChatPanel = ({ mode, onProcessingChange, onSpeakingChange, onLog }: ChatPa
   useEffect(() => { onProcessingChange?.(isProcessing); }, [isProcessing, onProcessingChange]);
   useEffect(() => { onSpeakingChange?.(isSpeaking); }, [isSpeaking, onSpeakingChange]);
   useEffect(() => { if (transcript) setInput(transcript); }, [transcript]);
+  useEffect(() => {
+    if (!isProcessing && messages.length > 0) {
+      onMessagesUpdate?.(messages.map(m => ({ role: m.role, content: m.content })));
+    }
+  }, [isProcessing, messages, onMessagesUpdate]);
 
   const handleSend = () => handleStream(input);
   const handleVoiceToggle = () => {
