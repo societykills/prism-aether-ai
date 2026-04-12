@@ -1,6 +1,6 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Terminal, MessageSquare, ChevronDown, Upload, FileText, X } from "lucide-react";
+import { Terminal, MessageSquare, ChevronDown, Upload, FileText, X, Eye } from "lucide-react";
 import NovaOrb from "@/components/nova/NovaOrb";
 import ParticleField from "@/components/nova/ParticleField";
 import ModeSelector, { AssistantMode } from "@/components/nova/ModeSelector";
@@ -10,6 +10,7 @@ import ActivityLog, { LogEntry } from "@/components/nova/ActivityLog";
 import StatusBar from "@/components/nova/StatusBar";
 import TerminalPanel from "@/components/nova/TerminalPanel";
 import CustomInstructionsPanel from "@/components/nova/CustomInstructionsPanel";
+import WebPreviewPanel from "@/components/nova/WebPreviewPanel";
 import { toast } from "sonner";
 
 interface DroppedFile {
@@ -17,6 +18,20 @@ interface DroppedFile {
   name: string;
   size: number;
   type: string;
+}
+
+/** Extract the last ```html ... ``` code block from messages */
+function extractHtmlFromMessages(messages: { role: string; content: string }[]): string | null {
+  // Search from newest to oldest for an assistant message with an html code block
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i];
+    if (msg.role !== "assistant") continue;
+    const match = msg.content.match(/```html\s*\n([\s\S]*?)```/);
+    if (match && match[1].trim().length > 100) {
+      return match[1].trim();
+    }
+  }
+  return null;
 }
 
 const Index = () => {
@@ -27,10 +42,13 @@ const Index = () => {
   const [chatOpen, setChatOpen] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [droppedFiles, setDroppedFiles] = useState<DroppedFile[]>([]);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewCode, setPreviewCode] = useState<string | null>(null);
+  const [previewFullscreen, setPreviewFullscreen] = useState(false);
   const dragCounter = useRef(0);
   const [logs, setLogs] = useState<LogEntry[]>([
     { id: "1", type: "system", text: "NOVA AI initialized", time: new Date().toLocaleTimeString() },
-    { id: "2", type: "system", text: "Real-time clock synchronized", time: new Date().toLocaleTimeString() },
+    { id: "2", type: "system", text: "Website builder ready", time: new Date().toLocaleTimeString() },
     { id: "3", type: "system", text: "All systems operational", time: new Date().toLocaleTimeString() },
   ]);
 
@@ -39,6 +57,19 @@ const Index = () => {
       [{ id: crypto.randomUUID(), type, text, time: new Date().toLocaleTimeString() }, ...prev].slice(0, 50)
     );
   }, []);
+
+  // Listen for website code from chat messages
+  const handleMessagesUpdate = useCallback((messages: { role: string; content: string }[]) => {
+    const html = extractHtmlFromMessages(messages);
+    if (html && html !== previewCode) {
+      setPreviewCode(html);
+      if (!previewOpen) {
+        setPreviewOpen(true);
+        addLog("tool", "Website preview opened");
+        toast.success("🌐 Website generated!", { description: "Preview panel opened" });
+      }
+    }
+  }, [previewCode, previewOpen, addLog]);
 
   const handleToolSelect = (toolId: string) => {
     const toolNames: Record<string, string> = {
@@ -115,12 +146,20 @@ const Index = () => {
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-primary animate-pulse-glow" />
             <h1 className="font-display text-sm font-bold tracking-[0.3em] text-primary/60">NOVA</h1>
-            <span className="text-[9px] font-mono text-muted-foreground bg-muted/20 px-1.5 py-0.5 rounded">v2.0</span>
+            <span className="text-[9px] font-mono text-muted-foreground bg-muted/20 px-1.5 py-0.5 rounded">v3.0</span>
           </div>
         </div>
         <div className="flex items-center gap-1">
           <ModeSelector activeMode={mode} onModeChange={handleModeChange} />
           <CustomInstructionsPanel />
+          <motion.button
+            onClick={() => { setPreviewOpen(!previewOpen); if (!previewOpen) setChatOpen(true); }}
+            className={`p-2 rounded-lg transition-all ${previewOpen ? "bg-primary/20 text-primary glow-border" : "text-muted-foreground hover:text-foreground"}`}
+            whileTap={{ scale: 0.9 }}
+            title="Website Preview"
+          >
+            <Eye className="w-4 h-4" />
+          </motion.button>
           <motion.button onClick={() => setTerminalOpen(!terminalOpen)} className={`p-2 rounded-lg transition-all ${terminalOpen ? "bg-primary/20 text-primary glow-border" : "text-muted-foreground hover:text-foreground"}`} whileTap={{ scale: 0.9 }}>
             <Terminal className="w-4 h-4" />
           </motion.button>
@@ -128,7 +167,8 @@ const Index = () => {
       </motion.header>
 
       <div className="flex-1 flex overflow-hidden relative z-[1]">
-        <div className="flex-1 flex flex-col items-center justify-center relative">
+        {/* Main content area */}
+        <div className={`flex-1 flex flex-col items-center justify-center relative transition-all duration-300 ${previewOpen && !previewFullscreen ? "w-1/2" : "w-full"}`}>
           <AnimatePresence mode="wait">
             {!chatOpen ? (
               <motion.div key="orb-view" initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} transition={{ duration: 0.4 }} className="flex flex-col items-center gap-6">
@@ -150,7 +190,7 @@ const Index = () => {
                 </AnimatePresence>
 
                 <motion.div className="flex flex-wrap justify-center gap-2 mt-2 max-w-md" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }}>
-                  {["What can you do?", "Help me code", "Search the web", "Write an email"].map((q, i) => (
+                  {["Build me a website", "Help me code", "Search the web", "Design a landing page"].map((q, i) => (
                     <motion.button key={q} onClick={() => setChatOpen(true)} className="text-xs px-4 py-2 rounded-full glass glow-border text-primary/70 hover:text-primary transition-all hover:bg-primary/5"
                       initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.7 + i * 0.1 }} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
                       <span className="text-primary/30 mr-1">→</span>{q}
@@ -193,7 +233,7 @@ const Index = () => {
                   </div>
                 </div>
                 <div className="flex-1 overflow-hidden">
-                  <ChatPanel mode={mode} onProcessingChange={setIsProcessing} onSpeakingChange={setIsSpeaking} onLog={addLog} />
+                  <ChatPanel mode={mode} onProcessingChange={setIsProcessing} onSpeakingChange={setIsSpeaking} onLog={addLog} onMessagesUpdate={handleMessagesUpdate} />
                 </div>
               </motion.div>
             )}
@@ -208,7 +248,28 @@ const Index = () => {
           </AnimatePresence>
         </div>
 
-        <motion.aside initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.25 }} className="w-64 border-l border-primary/10 p-3 space-y-3 overflow-y-auto hidden lg:block bg-background/30 backdrop-blur-sm">
+        {/* Website Preview Panel */}
+        <AnimatePresence>
+          {previewOpen && (
+            <motion.div
+              initial={{ width: 0, opacity: 0 }}
+              animate={{ width: previewFullscreen ? "100%" : "50%", opacity: 1 }}
+              exit={{ width: 0, opacity: 0 }}
+              transition={{ duration: 0.3 }}
+              className="h-full overflow-hidden"
+            >
+              <WebPreviewPanel
+                code={previewCode}
+                onClose={() => { setPreviewOpen(false); setPreviewFullscreen(false); }}
+                isFullscreen={previewFullscreen}
+                onToggleFullscreen={() => setPreviewFullscreen(!previewFullscreen)}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Sidebar */}
+        <motion.aside initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.25 }} className={`w-64 border-l border-primary/10 p-3 space-y-3 overflow-y-auto hidden lg:block bg-background/30 backdrop-blur-sm ${previewOpen ? "hidden" : ""}`}>
           <ToolsPanel onToolSelect={handleToolSelect} />
           <ActivityLog entries={logs} />
           <div className="glass rounded-xl p-3">
@@ -237,13 +298,3 @@ const Index = () => {
 };
 
 export default Index;
-
-
-
- 
-
-   
-   
-
-    
-         
