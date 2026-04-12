@@ -35,7 +35,7 @@ const modeGreetings: Record<AssistantMode, string> = {
   creative: "Creative engine initialized. Say \"Hey NOVA\" to begin.",
 };
 
-const ChatPanel = ({ mode, onProcessingChange, onSpeakingChange, onLog }: ChatPanelProps) => {
+const ChatPanel = ({ mode, onProcessingChange, onSpeakingChange, onLog, onMessagesUpdate }: ChatPanelProps) => {
   const [messages, setMessages] = useState<Message[]>(() => {
     try {
       const saved = localStorage.getItem(MESSAGES_KEY);
