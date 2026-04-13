@@ -74,18 +74,27 @@ export async function streamSearch({
   onDone: () => void;
   onError: (err: string) => void;
 }) {
-  const resp = await fetch(`${SUPABASE_URL}/functions/v1/nova-search`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${SUPABASE_KEY}`,
-    },
-    body: JSON.stringify({ query }),
-  });
+  let resp: Response;
+  try {
+    resp = await fetchWithRetry(`${SUPABASE_URL}/functions/v1/nova-search`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${SUPABASE_KEY}`,
+      },
+      body: JSON.stringify({ query }),
+    });
+  } catch {
+    onError("Connection issue — please try again.");
+    return;
+  }
 
   if (!resp.ok) {
-    const data = await resp.json().catch(() => ({ error: "Search failed" }));
-    onError(data.error || `Error ${resp.status}`);
+    if (resp.status === 402) {
+      onError("Please add credits in Settings → Workspace → Usage to continue.");
+    } else {
+      onError("Temporary issue — please try again in a moment.");
+    }
     return;
   }
 
