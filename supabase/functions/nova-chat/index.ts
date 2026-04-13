@@ -138,20 +138,20 @@ serve(async (req) => {
     });
 
     if (!response.ok) {
-      if (response.status === 429) {
-        return new Response(JSON.stringify({ error: "Rate limited. Please wait a moment." }), {
-          status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      if (response.status === 402) {
-        return new Response(JSON.stringify({ error: "Credits exhausted. Please add funds." }), {
-          status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      const t = await response.text();
-      console.error("AI gateway error:", response.status, t);
-      return new Response(JSON.stringify({ error: "AI gateway error" }), {
-        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      const errText = await response.text().catch(() => "");
+      console.error("AI gateway error:", response.status, errText);
+
+      // Return 200 with error JSON so the client doesn't crash
+      const errorMsg = response.status === 429
+        ? "Too many requests. Please wait a moment and try again."
+        : response.status === 402
+        ? "AI credits exhausted. Please try again later."
+        : "AI service temporarily unavailable. Please try again.";
+
+      // Stream a single SSE event with the error as assistant content, then DONE
+      const errorStream = `data: ${JSON.stringify({ choices: [{ delta: { content: errorMsg } }] })}\n\ndata: [DONE]\n\n`;
+      return new Response(errorStream, {
+        headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
       });
     }
 

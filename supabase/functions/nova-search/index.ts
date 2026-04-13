@@ -39,15 +39,18 @@ serve(async (req) => {
     });
 
     if (!response.ok) {
-      if (response.status === 429) {
-        return new Response(JSON.stringify({ error: "Rate limited." }), {
-          status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      const t = await response.text();
-      console.error("Search error:", response.status, t);
-      return new Response(JSON.stringify({ error: "Search failed" }), {
-        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      const errText = await response.text().catch(() => "");
+      console.error("Search error:", response.status, errText);
+
+      const errorMsg = response.status === 429
+        ? "Too many requests. Please wait a moment and try again."
+        : response.status === 402
+        ? "AI credits exhausted. Please try again later."
+        : "Search temporarily unavailable. Please try again.";
+
+      const errorStream = `data: ${JSON.stringify({ choices: [{ delta: { content: errorMsg } }] })}\n\ndata: [DONE]\n\n`;
+      return new Response(errorStream, {
+        headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
       });
     }
 
