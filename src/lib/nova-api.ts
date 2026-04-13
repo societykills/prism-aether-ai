@@ -31,9 +31,8 @@ export async function streamChat({
   onDone: () => void;
   onError: (err: string) => void;
 }) {
-  let resp: Response;
   try {
-    resp = await fetchWithRetry(`${SUPABASE_URL}/functions/v1/nova-chat`, {
+    const resp = await fetchWithRetry(`${SUPABASE_URL}/functions/v1/nova-chat`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -41,26 +40,24 @@ export async function streamChat({
       },
       body: JSON.stringify({ messages, mode, customInstructions }),
     });
-  } catch {
-    onError("Connection issue — please try again.");
-    return;
-  }
 
-  if (!resp.ok) {
-    if (resp.status === 402) {
-      onError("Please add credits in Settings → Workspace → Usage to continue.");
-    } else {
+    if (!resp.ok) {
+      const errText = await resp.text().catch(() => "");
+      console.warn("nova-chat error:", resp.status, errText);
       onError("Temporary issue — please try again in a moment.");
+      return;
     }
-    return;
-  }
 
-  if (!resp.body) {
-    onError("No response body");
-    return;
-  }
+    if (!resp.body) {
+      onError("No response body");
+      return;
+    }
 
-  await parseSSEStream(resp.body, onDelta, onDone);
+    await parseSSEStream(resp.body, onDelta, onDone);
+  } catch (e) {
+    console.warn("nova-chat exception:", e);
+    onError("Connection issue — please try again.");
+  }
 }
 
 export async function streamSearch({
@@ -74,9 +71,8 @@ export async function streamSearch({
   onDone: () => void;
   onError: (err: string) => void;
 }) {
-  let resp: Response;
   try {
-    resp = await fetchWithRetry(`${SUPABASE_URL}/functions/v1/nova-search`, {
+    const resp = await fetchWithRetry(`${SUPABASE_URL}/functions/v1/nova-search`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -84,26 +80,24 @@ export async function streamSearch({
       },
       body: JSON.stringify({ query }),
     });
-  } catch {
-    onError("Connection issue — please try again.");
-    return;
-  }
 
-  if (!resp.ok) {
-    if (resp.status === 402) {
-      onError("Please add credits in Settings → Workspace → Usage to continue.");
-    } else {
+    if (!resp.ok) {
+      const errText = await resp.text().catch(() => "");
+      console.warn("nova-search error:", resp.status, errText);
       onError("Temporary issue — please try again in a moment.");
+      return;
     }
-    return;
-  }
 
-  if (!resp.body) {
-    onError("No response body");
-    return;
-  }
+    if (!resp.body) {
+      onError("No response body");
+      return;
+    }
 
-  await parseSSEStream(resp.body, onDelta, onDone);
+    await parseSSEStream(resp.body, onDelta, onDone);
+  } catch (e) {
+    console.warn("nova-search exception:", e);
+    onError("Connection issue — please try again.");
+  }
 }
 
 async function parseSSEStream(
