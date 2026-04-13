@@ -3,6 +3,19 @@ const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
 type Msg = { role: "user" | "assistant"; content: string };
 
+async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3): Promise<Response> {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const resp = await fetch(url, options);
+    if (resp.status === 429 && attempt < maxRetries) {
+      const wait = Math.min(2000 * Math.pow(2, attempt), 10000);
+      await new Promise(r => setTimeout(r, wait));
+      continue;
+    }
+    return resp;
+  }
+  throw new Error("Max retries exceeded");
+}
+
 export async function streamChat({
   messages,
   mode,
@@ -18,18 +31,27 @@ export async function streamChat({
   onDone: () => void;
   onError: (err: string) => void;
 }) {
-  const resp = await fetch(`${SUPABASE_URL}/functions/v1/nova-chat`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${SUPABASE_KEY}`,
-    },
-    body: JSON.stringify({ messages, mode, customInstructions }),
-  });
+  let resp: Response;
+  try {
+    resp = await fetchWithRetry(`${SUPABASE_URL}/functions/v1/nova-chat`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${SUPABASE_KEY}`,
+      },
+      body: JSON.stringify({ messages, mode, customInstructions }),
+    });
+  } catch {
+    onError("Connection issue — please try again.");
+    return;
+  }
 
   if (!resp.ok) {
-    const data = await resp.json().catch(() => ({ error: "Request failed" }));
-    onError(data.error || `Error ${resp.status}`);
+    if (resp.status === 402) {
+      onError("Please add credits in Settings → Workspace → Usage to continue.");
+    } else {
+      onError("Temporary issue — please try again in a moment.");
+    }
     return;
   }
 
