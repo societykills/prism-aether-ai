@@ -307,13 +307,13 @@ const ChatPanel = ({ mode, onProcessingChange, onSpeakingChange, onLog, onMessag
         )}
       </AnimatePresence>
 
-      <div className="p-4 border-t border-border glass-strong">
+      <div className="p-3 border-t border-border glass-strong">
         {messages.length > 0 && (
-          <div className="flex justify-end gap-2 mb-2">
+          <div className="flex justify-end gap-1.5 mb-2">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 text-muted-foreground hover:text-primary">
-                  <Download className="w-3.5 h-3.5" /> Export
+                <Button variant="ghost" size="sm" className="h-6 text-[10px] gap-1 text-muted-foreground hover:text-primary px-2">
+                  <Download className="w-3 h-3" /> Export
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
@@ -321,39 +321,43 @@ const ChatPanel = ({ mode, onProcessingChange, onSpeakingChange, onLog, onMessag
                 <DropdownMenuItem onClick={() => exportChat("json")}>Export as JSON (.json)</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 text-muted-foreground hover:text-destructive" onClick={() => setShowClearDialog(true)}>
-              <Trash2 className="w-3.5 h-3.5" /> Clear
+            <Button variant="ghost" size="sm" className="h-6 text-[10px] gap-1 text-muted-foreground hover:text-destructive px-2" onClick={() => setShowClearDialog(true)}>
+              <Trash2 className="w-3 h-3" /> Clear
             </Button>
           </div>
         )}
 
-        <div className="flex items-center gap-2">
-          <motion.button onClick={toggleHandsFree} className={`p-2.5 rounded-lg transition-all shrink-0 ${handsFree ? "bg-primary text-primary-foreground glow-box-strong" : "glass text-muted-foreground hover:text-foreground"}`} whileTap={{ scale: 0.9 }} title={handsFree ? "Disable hands-free" : "Enable hands-free (Hey NOVA)"}>
-            <Radio className="w-4 h-4" />
-          </motion.button>
+        <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1 shrink-0">
+            <motion.button onClick={toggleHandsFree} className={`p-2 rounded-lg transition-all ${handsFree ? "bg-primary text-primary-foreground glow-box-strong" : "glass text-muted-foreground hover:text-foreground"}`} whileTap={{ scale: 0.9 }} title={handsFree ? "Disable hands-free" : "Enable hands-free (Hey NOVA)"}>
+              <Radio className="w-3.5 h-3.5" />
+            </motion.button>
 
-          <motion.button onClick={handleVoiceToggle} className={`p-2.5 rounded-lg transition-all shrink-0 ${isListening ? "bg-primary text-primary-foreground glow-box-strong" : "glass text-muted-foreground hover:text-foreground"}`} whileTap={{ scale: 0.9 }} title={isListening ? "Stop listening" : "Push to talk"}>
-            {isListening ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4" />}
-          </motion.button>
+            <motion.button onClick={handleVoiceToggle} className={`p-2 rounded-lg transition-all ${isListening ? "bg-primary text-primary-foreground glow-box-strong" : "glass text-muted-foreground hover:text-foreground"}`} whileTap={{ scale: 0.9 }} title={isListening ? "Stop listening" : "Push to talk"}>
+              {isListening ? <Mic className="w-3.5 h-3.5" /> : <MicOff className="w-3.5 h-3.5" />}
+            </motion.button>
 
-          <motion.button onClick={() => setIsSearchMode(!isSearchMode)} className={`p-2.5 rounded-lg transition-all shrink-0 ${isSearchMode ? "bg-nova-glow-secondary text-secondary-foreground glow-box" : "glass text-muted-foreground hover:text-foreground"}`} whileTap={{ scale: 0.9 }} title={isSearchMode ? "Chat mode" : "Search mode"}>
-            <Search className="w-4 h-4" />
-          </motion.button>
+            <motion.button onClick={() => setIsSearchMode(!isSearchMode)} className={`p-2 rounded-lg transition-all ${isSearchMode ? "bg-nova-glow-secondary text-secondary-foreground glow-box" : "glass text-muted-foreground hover:text-foreground"}`} whileTap={{ scale: 0.9 }} title={isSearchMode ? "Chat mode" : "Search mode"}>
+              <Search className="w-3.5 h-3.5" />
+            </motion.button>
+          </div>
 
-          <div className="flex-1 relative">
+          <div className="flex-1 relative min-w-0">
             <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleSend()}
-              placeholder={isSearchMode ? "Search the web..." : handsFree ? "Say \"Hey NOVA\" or type..." : `Message NOVA [${mode.toUpperCase()}]...`}
-              className="w-full bg-muted/20 border border-border rounded-xl px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 font-mono pr-10" />
+              placeholder={isSearchMode ? "Search the web..." : handsFree ? "Say \"Hey NOVA\" or type..." : `Message NOVA...`}
+              className="w-full bg-muted/20 border border-border rounded-xl px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 font-mono" />
             {isSearchMode && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] font-display text-nova-glow-secondary/60 uppercase">Search</span>}
           </div>
 
-          <motion.button onClick={toggleVoiceOutput} className={`p-2.5 rounded-lg transition-all shrink-0 ${voiceEnabled ? "bg-primary/20 text-primary glow-border" : "glass text-muted-foreground hover:text-foreground"}`} whileTap={{ scale: 0.9 }} title={voiceEnabled ? "Disable voice output" : "Enable voice output"}>
-            {voiceEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
-          </motion.button>
+          <div className="flex items-center gap-1 shrink-0">
+            <motion.button onClick={toggleVoiceOutput} className={`p-2 rounded-lg transition-all ${voiceEnabled ? "bg-primary/20 text-primary glow-border" : "glass text-muted-foreground hover:text-foreground"}`} whileTap={{ scale: 0.9 }} title={voiceEnabled ? "Disable voice output" : "Enable voice output"}>
+              {voiceEnabled ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
+            </motion.button>
 
-          <motion.button onClick={handleSend} disabled={!input.trim() || isProcessing} className="p-2.5 rounded-xl bg-primary text-primary-foreground disabled:opacity-30 disabled:cursor-not-allowed glow-box shrink-0" whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-            <Send className="w-4 h-4" />
-          </motion.button>
+            <motion.button onClick={handleSend} disabled={!input.trim() || isProcessing} className="p-2 rounded-xl bg-primary text-primary-foreground disabled:opacity-30 disabled:cursor-not-allowed glow-box shrink-0" whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+              <Send className="w-3.5 h-3.5" />
+            </motion.button>
+          </div>
         </div>
       </div>
     </div>

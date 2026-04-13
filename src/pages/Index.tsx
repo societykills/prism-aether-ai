@@ -149,20 +149,23 @@ const Index = () => {
             <span className="text-[9px] font-mono text-muted-foreground bg-muted/20 px-1.5 py-0.5 rounded">v3.0</span>
           </div>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-3">
           <ModeSelector activeMode={mode} onModeChange={handleModeChange} />
-          <CustomInstructionsPanel />
-          <motion.button
-            onClick={() => { setPreviewOpen(!previewOpen); if (!previewOpen) setChatOpen(true); }}
-            className={`p-2 rounded-lg transition-all ${previewOpen ? "bg-primary/20 text-primary glow-border" : "text-muted-foreground hover:text-foreground"}`}
-            whileTap={{ scale: 0.9 }}
-            title="Website Preview"
-          >
-            <Eye className="w-4 h-4" />
-          </motion.button>
-          <motion.button onClick={() => setTerminalOpen(!terminalOpen)} className={`p-2 rounded-lg transition-all ${terminalOpen ? "bg-primary/20 text-primary glow-border" : "text-muted-foreground hover:text-foreground"}`} whileTap={{ scale: 0.9 }}>
-            <Terminal className="w-4 h-4" />
-          </motion.button>
+          <div className="w-px h-5 bg-border/30" />
+          <div className="flex items-center gap-1.5">
+            <CustomInstructionsPanel />
+            <motion.button
+              onClick={() => { setPreviewOpen(!previewOpen); if (!previewOpen) setChatOpen(true); }}
+              className={`p-2 rounded-lg transition-all ${previewOpen ? "bg-primary/20 text-primary glow-border" : "text-muted-foreground hover:text-foreground"}`}
+              whileTap={{ scale: 0.9 }}
+              title="Website Preview"
+            >
+              <Eye className="w-4 h-4" />
+            </motion.button>
+            <motion.button onClick={() => setTerminalOpen(!terminalOpen)} className={`p-2 rounded-lg transition-all ${terminalOpen ? "bg-primary/20 text-primary glow-border" : "text-muted-foreground hover:text-foreground"}`} whileTap={{ scale: 0.9 }}>
+              <Terminal className="w-4 h-4" />
+            </motion.button>
+          </div>
         </div>
       </motion.header>
 
@@ -269,7 +272,7 @@ const Index = () => {
         </AnimatePresence>
 
         {/* Sidebar */}
-        <motion.aside initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.25 }} className={`w-64 border-l border-primary/10 p-3 space-y-3 overflow-y-auto hidden lg:block bg-background/30 backdrop-blur-sm ${previewOpen ? "hidden" : ""}`}>
+        <motion.aside initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.25 }} className={`w-64 border-l border-primary/10 p-3 space-y-3 overflow-y-auto bg-background/30 backdrop-blur-sm ${previewOpen ? "hidden" : "hidden lg:block"}`}>
           <ToolsPanel onToolSelect={handleToolSelect} />
           <ActivityLog entries={logs} />
           <div className="glass rounded-xl p-3">
